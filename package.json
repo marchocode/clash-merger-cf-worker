@@ -1,0 +1,19 @@
+{
+  "name": "clash-merger-cf-worker",
+  "version": "1.0.0",
+  "description": "Clash 订阅合并工具 - Cloudflare Worker 版本",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "keywords": ["clash", "proxy", "cloudflare-worker", "subscription"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^3.0.0"
+  },
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  }
+}

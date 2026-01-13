@@ -1,0 +1,10 @@
+[
+  {
+    "name": "订阅1",
+    "url": "https://example.com/api/v1/client/subscribe?token=your-token-here"
+  },
+  {
+    "name": "订阅2",
+    "url": "https://example.com/sub?token=your-token-here"
+  }
+]
