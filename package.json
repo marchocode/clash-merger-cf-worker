@@ -7,11 +7,16 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy"
   },
-  "keywords": ["clash", "proxy", "cloudflare-worker", "subscription"],
+  "keywords": [
+    "clash",
+    "proxy",
+    "cloudflare-worker",
+    "subscription"
+  ],
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "wrangler": "^3.0.0"
+    "wrangler": "^4.59.1"
   },
   "dependencies": {
     "js-yaml": "^4.1.0"

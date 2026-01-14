@@ -2,6 +2,10 @@
 
 这是 Clash 订阅合并工具的 Cloudflare Worker 版本，使用 KV 数据库存储配置。
 
+## 运行截图
+![1.png](./img/1.png)
+![2.png](./img/2.png)
+
 ## 功能特点
 
 - ✅ 运行在 Cloudflare Workers 上，无需服务器
