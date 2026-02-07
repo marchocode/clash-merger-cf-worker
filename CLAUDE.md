@@ -6,6 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 这是一个 Cloudflare Worker 应用，用于合并多个 Clash 代理订阅源。它从 KV 数据库读取配置，获取多个订阅源的代理列表，合并后生成统一的 Clash 配置文件。
 
+**核心功能**：
+- 合并多个订阅源的代理节点
+- 支持添加自定义代理服务器（Hysteria2、VMess、Trojan 等）
+- 提供 Web 管理界面，可视化管理订阅和自定义代理
+- 自动生成代理组（PROXY、订阅源组、Custom、AUTO）
+
 ## 常用命令
 
 ### 开发和部署
@@ -32,14 +38,34 @@ wrangler kv:key put --binding=CLASH_KV "TOKEN" "your-token-here"
 # 设置订阅列表（从文件）
 wrangler kv:key put --binding=CLASH_KV "SUBS" --path=subs.json
 
+# 设置自定义代理（从文件）
+wrangler kv:key put --binding=CLASH_KV "CUSTOM_PROXIES" --path=custom-proxies.json
+
 # 查看 KV 数据
 wrangler kv:key get --binding=CLASH_KV "TOKEN"
 wrangler kv:key get --binding=CLASH_KV "SUBS"
+wrangler kv:key get --binding=CLASH_KV "CUSTOM_PROXIES"
 ```
 
 ## 核心架构
 
-### 数据流程
+### 路由结构
+
+Worker 提供以下路由：
+
+1. **订阅合并** - `/subs/<token>` - 返回合并后的 Clash 配置（YAML）
+2. **Web 管理界面**：
+   - `/` 或 `/login` - 登录页面
+   - `/admin` - 管理页面（订阅和自定义代理管理）
+3. **管理 API**：
+   - `POST /api/login` - 登录验证
+   - `GET /api/subs` - 获取订阅列表
+   - `PUT /api/subs` - 更新订阅列表
+   - `GET /api/custom-proxies` - 获取自定义代理列表
+   - `PUT /api/custom-proxies` - 更新自定义代理列表
+4. **健康检查** - `/health` - 返回服务状态
+
+### 数据流程（订阅合并）
 
 1. **请求入口** (`src/index.js`)
    - Worker 接收 `/subs/<token>` 请求
@@ -62,6 +88,8 @@ wrangler kv:key get --binding=CLASH_KV "SUBS"
 5. **配置合并** (`src/clash-merger.js`)
    - 加载基础配置 (`BASE_CONFIG`)
    - 合并所有订阅源的代理节点
+   - 从 KV 读取 CUSTOM_PROXIES（自定义代理）
+   - 如果有自定义代理，添加到代理列表并创建 Custom 组
    - 生成代理组结构（见下文）
 
 6. **YAML 输出**
@@ -73,10 +101,17 @@ wrangler kv:key get --binding=CLASH_KV "SUBS"
 ClashMerger 按以下顺序生成代理组：
 
 1. **订阅源组** - 为每个订阅源创建一个 `select` 类型组，包含该源的所有节点
-2. **AUTO 组** - `url-test` 类型，包含所有节点，自动选择延迟最低的
-3. **PROXY 组** - `select` 类型，包含所有其他组，作为主选择器（插入到最前面）
+2. **Custom 组** - 如果有自定义代理，创建 `select` 类型组，包含所有自定义代理
+3. **AUTO 组** - `url-test` 类型，包含所有节点（订阅+自定义），自动选择延迟最低的
+4. **PROXY 组** - `select` 类型，包含所有其他组，作为主选择器（插入到最前面）
 
-最终生成的 `proxy-groups` 顺序：`[PROXY, 订阅1, 订阅2, ..., AUTO]`
+最终生成的 `proxy-groups` 顺序：`[PROXY, 订阅1, 订阅2, ..., Custom, AUTO]`
+
+**代码位置**：
+- `processGroup()` - 创建订阅源组 (src/clash-merger.js:101)
+- `processCustomGroup()` - 创建 Custom 组 (src/clash-merger.js:118)
+- `processAutoGroup()` - 创建 AUTO 组 (src/clash-merger.js:52)
+- `processProxyGroup()` - 创建 PROXY 组 (src/clash-merger.js:71)
 
 ## KV 数据结构
 
@@ -90,6 +125,27 @@ ClashMerger 按以下顺序生成代理组：
 - **格式**: JSON 字符串数组
 - **结构**: `[{"name": "订阅名", "url": "订阅URL"}, ...]`
 - **示例文件**: `subs.example.json`
+
+### CUSTOM_PROXIES (JSON 数组)
+- **键名**: `CUSTOM_PROXIES`
+- **格式**: JSON 字符串数组
+- **结构**: `[{代理配置对象}, ...]`
+- **用途**: 存储用户自定义的代理服务器配置
+- **配置格式**: 与 Clash 配置文件中的 `proxies` 项完全相同
+- **示例**:
+  ```json
+  [
+    {
+      "name": "My Hysteria2",
+      "type": "hysteria2",
+      "server": "example.com",
+      "port": 443,
+      "password": "your-password",
+      "sni": "example.com"
+    }
+  ]
+  ```
+- **管理方式**: 推荐通过 Web 管理界面添加，也可通过命令行设置
 
 ## 重要配置文件
 
