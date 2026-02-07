@@ -12,7 +12,9 @@
 - ✅ 运行在 Cloudflare Workers 上，无需服务器
 - ✅ 使用 KV 数据库存储 Token 和订阅配置
 - ✅ 支持多个订阅源合并
-- ✅ 自动创建代理组（AUTO 自动选择、PROXY 手动选择）
+- ✅ **支持自定义代理服务器**（Hysteria2、VMess、Trojan 等）
+- ✅ **Web 管理界面**，可视化管理订阅和自定义代理
+- ✅ 自动创建代理组（AUTO 自动选择、PROXY 手动选择、Custom 自定义代理组）
 - ✅ 基于 Loyalsoldier/clash-rules 的智能分流规则
 
 ## 项目结构
@@ -121,6 +123,47 @@ https://clash-merger-cf-worker.your-subdomain.workers.dev
 
 ## 使用方法
 
+### Web 管理界面
+
+访问 Worker URL 的根路径即可进入管理界面：
+
+```
+https://your-worker-url.workers.dev/
+```
+
+**功能**：
+- 📝 **订阅管理**：添加、编辑、删除订阅源
+- 🔧 **自定义代理**：添加自己的代理服务器（Hysteria2、VMess、Trojan 等）
+- 🔐 **Token 登录**：使用 KV 中设置的 TOKEN 登录
+
+**使用步骤**：
+1. 访问管理页面
+2. 输入你在 KV 中设置的 TOKEN
+3. 登录后可以管理订阅列表和自定义代理
+
+#### 添加自定义代理
+
+在管理界面的"自定义代理"区域：
+
+1. 点击"➕ 添加代理"
+2. 输入代理名称（例如：My Hysteria2）
+3. 输入 JSON 格式的代理配置：
+
+```json
+{
+  "name": "My Hysteria2",
+  "type": "hysteria2",
+  "server": "example.com",
+  "port": 443,
+  "password": "your-password",
+  "sni": "example.com"
+}
+```
+
+4. 点击保存
+
+**支持的代理类型**：所有 Clash 支持的协议（ss、ssr、vmess、vless、trojan、hysteria、hysteria2 等）
+
 ### 订阅地址格式
 
 ```
@@ -178,6 +221,53 @@ https://clash-merger-cf-worker.your-subdomain.workers.dev/subs/your-secret-token
 ]
 ```
 
+### CUSTOM_PROXIES (JSON 数组)
+
+存储自定义代理服务器配置。
+
+**键名**: `CUSTOM_PROXIES`
+**值类型**: JSON 字符串（数组格式）
+**结构**:
+```json
+[
+  {
+    "name": "代理名称",
+    "type": "协议类型",
+    "server": "服务器地址",
+    "port": 端口号,
+    ... 其他协议特定参数
+  }
+]
+```
+
+**完整示例**:
+```json
+[
+  {
+    "name": "My Hysteria2",
+    "type": "hysteria2",
+    "server": "example.com",
+    "port": 443,
+    "password": "your-password",
+    "sni": "example.com"
+  },
+  {
+    "name": "My VMess",
+    "type": "vmess",
+    "server": "example.com",
+    "port": 443,
+    "uuid": "your-uuid",
+    "alterId": 0,
+    "cipher": "auto"
+  }
+]
+```
+
+**注意**：
+- 配置格式与 Clash 配置文件中的 `proxies` 项完全相同
+- 建议通过 Web 管理界面添加，会自动验证 JSON 格式
+- 也可以通过命令行手动设置（见下文）
+
 ## 管理 KV 数据
 
 ### 查看现有数据
@@ -206,13 +296,46 @@ wrangler kv:key put --binding=CLASH_KV "SUBS" '[{"name":"新订阅","url":"https
 wrangler kv:key put --binding=CLASH_KV "TOKEN" "new-token-here"
 ```
 
+### 管理自定义代理
+
+```bash
+# 查看自定义代理
+wrangler kv:key get --binding=CLASH_KV "CUSTOM_PROXIES"
+
+# 使用文件设置自定义代理
+wrangler kv:key put --binding=CLASH_KV "CUSTOM_PROXIES" --path=custom-proxies.json
+
+# 直接输入（单个代理）
+wrangler kv:key put --binding=CLASH_KV "CUSTOM_PROXIES" '[{"name":"My Proxy","type":"hysteria2","server":"example.com","port":443,"password":"pass"}]'
+
+# 清空自定义代理
+wrangler kv:key put --binding=CLASH_KV "CUSTOM_PROXIES" '[]'
+```
+
+**推荐方式**：使用 Web 管理界面添加和管理自定义代理，更加直观和安全。
+
 ## 生成的配置说明
 
 Worker 会自动生成以下代理组：
 
 1. **PROXY** - 主代理组（手动选择），包含所有其他组
-2. **AUTO** - 自动选择组（URL 测试），包含所有代理节点
-3. **订阅源名称** - 每个订阅源会生成一个独立的选择组
+2. **订阅源名称** - 每个订阅源会生成一个独立的选择组
+3. **Custom** - 自定义代理组（如果有自定义代理），包含所有自定义代理
+4. **AUTO** - 自动选择组（URL 测试），包含所有代理节点
+
+**代理组层级结构**：
+```
+PROXY (主选择器)
+├── 订阅1 (包含订阅1的所有节点)
+├── 订阅2 (包含订阅2的所有节点)
+├── Custom (包含所有自定义代理) ← 新增
+└── AUTO (包含所有节点，自动选择最快)
+```
+
+**使用场景**：
+- 想用特定订阅源的节点 → 选择对应的订阅组
+- 想用自己的代理服务器 → 选择 Custom 组
+- 让系统自动选择最快节点 → 选择 AUTO 组
 
 ## 注意事项
 

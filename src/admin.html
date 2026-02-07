@@ -197,18 +197,24 @@
             margin-bottom: 8px;
         }
 
-        .form-group input {
+        .form-group input, .form-group textarea {
             width: 100%;
             padding: 12px 15px;
             border: 2px solid #e0e0e0;
             border-radius: 8px;
             font-size: 14px;
             transition: border-color 0.3s;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
         }
 
-        .form-group input:focus {
+        .form-group input:focus, .form-group textarea:focus {
             outline: none;
             border-color: #667eea;
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 150px;
         }
 
         .modal-actions {
@@ -299,6 +305,17 @@
                 <div class="loading">加载中...</div>
             </div>
         </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h2>自定义代理</h2>
+                <button class="btn-add" onclick="openAddCustomProxyModal()">➕ 添加代理</button>
+            </div>
+
+            <div id="customProxyList" class="sub-list">
+                <div class="loading">加载中...</div>
+            </div>
+        </div>
     </div>
 
     <!-- 添加/编辑订阅模态框 -->
@@ -322,9 +339,32 @@
         </div>
     </div>
 
+    <!-- 添加/编辑自定义代理模态框 -->
+    <div id="customProxyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header" id="customProxyModalTitle">添加自定义代理</div>
+            <form id="customProxyForm">
+                <div class="form-group">
+                    <label for="proxyName">代理名称</label>
+                    <input type="text" id="proxyName" placeholder="例如：My Hysteria2" required>
+                </div>
+                <div class="form-group">
+                    <label for="proxyConfig">代理配置 (JSON)</label>
+                    <textarea id="proxyConfig" rows="10" placeholder='{"name": "My Hysteria2", "type": "hysteria2", "server": "example.com", "port": 443, "password": "password"}' required></textarea>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-cancel" onclick="closeCustomProxyModal()">取消</button>
+                    <button type="submit" class="btn-save">保存</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         let subs = [];
         let editingIndex = -1;
+        let customProxies = [];
+        let editingCustomProxyIndex = -1;
 
         // 页面加载时检查登录状态
         window.addEventListener('load', () => {
@@ -334,6 +374,7 @@
                 return;
             }
             loadSubs();
+            loadCustomProxies();
         });
 
         // 加载订阅列表
@@ -443,6 +484,61 @@
             await saveSubs();
         }
 
+        // 加载自定义代理列表
+        async function loadCustomProxies() {
+            try {
+                const token = sessionStorage.getItem('auth_token');
+                const response = await fetch('/api/custom-proxies', {
+                    headers: {
+                        'Authorization': token
+                    }
+                });
+
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error('加载失败');
+                }
+
+                const data = await response.json();
+                customProxies = data.customProxies || [];
+                renderCustomProxies();
+            } catch (error) {
+                showMessage('加载自定义代理列表失败：' + error.message, 'error');
+            }
+        }
+
+        // 渲染自定义代理列表
+        function renderCustomProxies() {
+            const customProxyList = document.getElementById('customProxyList');
+
+            if (customProxies.length === 0) {
+                customProxyList.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📭</div>
+                        <p>暂无自定义代理，点击右上角添加代理</p>
+                    </div>
+                `;
+                return;
+            }
+
+            customProxyList.innerHTML = customProxies.map((proxy, index) => `
+                <div class="sub-item">
+                    <div class="sub-item-header">
+                        <div class="sub-item-name">${escapeHtml(proxy.name)}</div>
+                        <div class="sub-item-actions">
+                            <button class="btn-edit" onclick="openEditCustomProxyModal(${index})">编辑</button>
+                            <button class="btn-delete" onclick="deleteCustomProxy(${index})">删除</button>
+                        </div>
+                    </div>
+                    <div class="sub-item-url">类型: ${escapeHtml(proxy.type || 'unknown')} | 服务器: ${escapeHtml(proxy.server || 'N/A')}</div>
+                </div>
+            `).join('');
+        }
+
         // 保存到服务器
         async function saveSubs() {
             try {
@@ -472,6 +568,69 @@
             }
         }
 
+        // 打开添加自定义代理模态框
+        function openAddCustomProxyModal() {
+            editingCustomProxyIndex = -1;
+            document.getElementById('customProxyModalTitle').textContent = '添加自定义代理';
+            document.getElementById('proxyName').value = '';
+            document.getElementById('proxyConfig').value = '';
+            document.getElementById('customProxyModal').classList.add('show');
+        }
+
+        // 打开编辑自定义代理模态框
+        function openEditCustomProxyModal(index) {
+            editingCustomProxyIndex = index;
+            const proxy = customProxies[index];
+            document.getElementById('customProxyModalTitle').textContent = '编辑自定义代理';
+            document.getElementById('proxyName').value = proxy.name;
+            document.getElementById('proxyConfig').value = JSON.stringify(proxy, null, 2);
+            document.getElementById('customProxyModal').classList.add('show');
+        }
+
+        // 关闭自定义代理模态框
+        function closeCustomProxyModal() {
+            document.getElementById('customProxyModal').classList.remove('show');
+        }
+
+        // 删除自定义代理
+        async function deleteCustomProxy(index) {
+            if (!confirm('确定要删除这个自定义代理吗？')) {
+                return;
+            }
+
+            customProxies.splice(index, 1);
+            await saveCustomProxies();
+        }
+
+        // 保存自定义代理到服务器
+        async function saveCustomProxies() {
+            try {
+                const token = sessionStorage.getItem('auth_token');
+                const response = await fetch('/api/custom-proxies', {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': token
+                    },
+                    body: JSON.stringify({ customProxies })
+                });
+
+                if (response.status === 401) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                if (!response.ok) {
+                    throw new Error('保存失败');
+                }
+
+                showMessage('保存成功！', 'success');
+                renderCustomProxies();
+            } catch (error) {
+                showMessage('保存失败：' + error.message, 'error');
+            }
+        }
+
         // 退出登录
         function logout() {
             sessionStorage.removeItem('auth_token');
@@ -495,10 +654,47 @@
             return div.innerHTML;
         }
 
+        // 自定义代理表单提交
+        document.getElementById('customProxyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const name = document.getElementById('proxyName').value.trim();
+            const configStr = document.getElementById('proxyConfig').value.trim();
+
+            // 验证 JSON 格式
+            let proxyConfig;
+            try {
+                proxyConfig = JSON.parse(configStr);
+            } catch (error) {
+                showMessage('JSON 格式错误：' + error.message, 'error');
+                return;
+            }
+
+            // 确保配置中包含 name 字段
+            proxyConfig.name = name;
+
+            if (editingCustomProxyIndex === -1) {
+                // 添加新代理
+                customProxies.push(proxyConfig);
+            } else {
+                // 编辑现有代理
+                customProxies[editingCustomProxyIndex] = proxyConfig;
+            }
+
+            await saveCustomProxies();
+            closeCustomProxyModal();
+        });
+
         // 点击模态框外部关闭
         document.getElementById('modal').addEventListener('click', (e) => {
             if (e.target.id === 'modal') {
                 closeModal();
+            }
+        });
+
+        document.getElementById('customProxyModal').addEventListener('click', (e) => {
+            if (e.target.id === 'customProxyModal') {
+                closeCustomProxyModal();
             }
         });
     </script>

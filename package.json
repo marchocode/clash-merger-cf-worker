@@ -4,7 +4,8 @@
   "description": "Clash 订阅合并工具 - Cloudflare Worker 版本",
   "main": "src/index.js",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --remote",
+    "dev:local": "wrangler dev",
     "deploy": "wrangler deploy"
   },
   "keywords": [
@@ -16,7 +17,7 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "wrangler": "^4.59.1"
+    "wrangler": "^4.63.0"
   },
   "dependencies": {
     "js-yaml": "^4.1.0"

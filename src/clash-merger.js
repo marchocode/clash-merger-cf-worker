@@ -4,9 +4,10 @@ import yaml from 'js-yaml';
  * Clash 配置合并器
  */
 export class ClashMerger {
-  constructor(providers, baseConfig) {
+  constructor(providers, baseConfig, kv) {
     this.providers = providers;
     this.baseConfig = baseConfig;
+    this.kv = kv;
     this.config = {};
     this.proxies = [];
     this.proxyGroups = [];
@@ -33,6 +34,18 @@ export class ClashMerger {
 
       // 为每个订阅创建一个选择组
       this.processGroup(provider);
+    }
+
+    // 获取并处理自定义代理
+    const customProxiesJson = await this.kv.get('CUSTOM_PROXIES');
+    const customProxies = customProxiesJson ? JSON.parse(customProxiesJson) : [];
+
+    if (customProxies.length > 0) {
+      // 添加自定义代理到总列表
+      this.proxies.push(...customProxies);
+
+      // 创建 Custom 代理组
+      this.processCustomGroup(customProxies);
     }
 
     // 创建 AUTO 自动选择组
@@ -97,6 +110,23 @@ export class ClashMerger {
     }
 
     this.proxyGroups.push(group);
+  }
+
+  /**
+   * 创建 Custom 自定义代理组
+   */
+  processCustomGroup(customProxies) {
+    const customGroup = {
+      name: 'Custom',
+      type: 'select',
+      proxies: []
+    };
+
+    for (const proxy of customProxies) {
+      customGroup.proxies.push(proxy.name);
+    }
+
+    this.proxyGroups.push(customGroup);
   }
 
   /**

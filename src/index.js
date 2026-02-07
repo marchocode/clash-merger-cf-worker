@@ -110,6 +110,43 @@ async function handleUpdateSubs(request, kv, logger) {
 }
 
 /**
+ * 处理获取自定义代理列表请求
+ */
+async function handleGetCustomProxies(request, kv, logger) {
+  const isAuthed = await verifyAuth(request, kv);
+  if (!isAuthed) {
+    logger.warn('获取自定义代理列表失败：未授权');
+    return jsonResponse({ error: '未授权' }, 401);
+  }
+
+  const customProxiesJson = await kv.get('CUSTOM_PROXIES');
+  const customProxies = customProxiesJson ? JSON.parse(customProxiesJson) : [];
+
+  logger.info('获取自定义代理列表成功', { count: customProxies.length });
+  return jsonResponse({ customProxies });
+}
+
+/**
+ * 处理更新自定义代理列表请求
+ */
+async function handleUpdateCustomProxies(request, kv, logger) {
+  const isAuthed = await verifyAuth(request, kv);
+  if (!isAuthed) {
+    logger.warn('更新自定义代理列表失败：未授权');
+    return jsonResponse({ error: '未授权' }, 401);
+  }
+
+  const body = await request.json();
+  const { customProxies } = body;
+
+  logger.info('更新自定义代理列表', { count: customProxies.length });
+  await kv.put('CUSTOM_PROXIES', JSON.stringify(customProxies));
+
+  logger.info('自定义代理列表保存成功');
+  return jsonResponse({ success: true, message: '保存成功' });
+}
+
+/**
  * 处理订阅请求
  */
 async function handleSubscription(token, kv, logger) {
@@ -133,7 +170,7 @@ async function handleSubscription(token, kv, logger) {
   const providers = subs.map(sub => new ProxyProvider(sub.name, sub.url));
 
   // 合并配置
-  const merger = new ClashMerger(providers, BASE_CONFIG);
+  const merger = new ClashMerger(providers, BASE_CONFIG, kv);
   await merger.merge();
 
   logger.info('订阅合并完成');
@@ -198,6 +235,14 @@ export default {
       // 路由: 更新订阅列表 API
       else if (path === '/api/subs' && method === 'PUT') {
         response = await handleUpdateSubs(request, env.CLASH_KV, logger);
+      }
+      // 路由: 获取自定义代理列表 API
+      else if (path === '/api/custom-proxies' && method === 'GET') {
+        response = await handleGetCustomProxies(request, env.CLASH_KV, logger);
+      }
+      // 路由: 更新自定义代理列表 API
+      else if (path === '/api/custom-proxies' && method === 'PUT') {
+        response = await handleUpdateCustomProxies(request, env.CLASH_KV, logger);
       }
       // 路由: /subs/<token>
       else {
